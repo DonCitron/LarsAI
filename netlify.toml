@@ -1,16 +1,22 @@
 [build]
-  command = "pip install -r requirements.txt && python -c 'from app import app; open("render/_redirects", "w").write("/* /index.html 200"); open("render/_headers", "w").write("/*\n  X-Frame-Options: DENY\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: same-origin\n  Permissions-Policy: camera=(), microphone=()\n")'"
-  publish = "render"
+  command = "npm install && pip install -r requirements.txt"
+  publish = "static"
   functions = "functions"
 
-[functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["duckduckgo-search"]
+[build.environment]
+  PYTHON_VERSION = "3.9"
+  NODE_VERSION = "18"
+  # Set ANTHROPIC_API_KEY in Netlify UI
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["duckduckgo-search"]
+  included_files = ["app.py", "requirements.txt"]
 
 [[headers]]
   for = "/*"
@@ -19,3 +25,8 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "same-origin"
     Permissions-Policy = "camera=(), microphone=()"
+
+[dev]
+  command = "python app.py"
+  targetPort = 5001
+  publish = "static"
