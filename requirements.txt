@@ -5,5 +5,4 @@ duckduckgo-search==8.0.3
 requests==2.32.4
 gunicorn==21.2.0
 Pillow==10.4.0
-vercel==0.0.1
 werkzeug==2.3.8
