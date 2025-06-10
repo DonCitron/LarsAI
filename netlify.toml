@@ -15,8 +15,8 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["duckduckgo-search"]
-  included_files = ["app.py", "requirements.txt"]
+  external_node_modules = ["duckduckgo-search", "requests", "flask", "flask-cors", "python-dotenv", "Pillow"]
+  included_files = ["app.py", "requirements.txt", "*.py"]
 
 [[headers]]
   for = "/*"

@@ -4,12 +4,13 @@
   "description": "VQA Tool with Netlify Functions",
   "main": "index.js",
   "scripts": {
+    "build": "echo 'Build complete'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "uuid": "^9.0.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }
