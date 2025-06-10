@@ -271,5 +271,6 @@ if __name__ == '__main__':
         result = process_image(image_path)
         print(json.dumps(result))
     else:
-        # Start the server for local development
-        app.run(host='0.0.0.0', port=5001, debug=True)
+        # Start the server - Railway uses PORT environment variable
+        port = int(os.environ.get('PORT', 5001))
+        app.run(host='0.0.0.0', port=port, debug=False)
