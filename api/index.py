@@ -13,10 +13,14 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-def process_image(file_content):
-    # This is a placeholder - the actual processing will be done in the main app
-    # We'll move the relevant code here in the next step
-    return {"answer": "This is a test response. Image processing will be implemented here."}
+# Get API key from environment
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+
+def process_image(file_path):
+    """Process an image file and return VQA result."""
+    # For now, return a simple response
+    # The full implementation would go here
+    return {"answer": "Image processing endpoint is working. Full implementation pending."}
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
