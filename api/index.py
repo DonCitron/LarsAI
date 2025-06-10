@@ -41,27 +41,6 @@ def upload_file():
         if 'temp_file' in locals() and os.path.exists(temp_file.name):
             os.unlink(temp_file.name)
 
-# This is the Vercel serverless function entry point
-def handler(event, context):
-    # This will be called by Vercel
-    from werkzeug.serving import run_simple
-    from werkzeug.wrappers import Request, Response
-    
-    # Convert Vercel event to WSGI environment
-    environ = event.get('__wsgi_environ', {})
-    request = Request(environ)
-    
-    # Handle the request with Flask
-    with app.request_context(environ):
-        response = app.full_dispatch_request()
-    
-    # Convert Flask response to Vercel format
-    return {
-        'statusCode': response.status_code,
-        'headers': dict(response.headers),
-        'body': response.get_data(as_text=True)
-    }
-
 # For local testing
 if __name__ == '__main__':
     app.run(debug=True)
