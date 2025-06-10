@@ -156,23 +156,27 @@
             formData.append('file', selectedFile);
             
             try {
-                const response = await fetch('/upload', {
+                // Use Netlify function for deployment
+                const response = await fetch('/.netlify/functions/upload', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    headers: {
+                        // Let the browser set the Content-Type with the correct boundary
+                    },
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok) {
                     resultDiv.className = 'success';
-                    resultDiv.textContent = `Answer: ${data.answer}`;
+                    resultDiv.textContent = `Answer: ${data.answer || data}`;
                 } else {
                     resultDiv.className = 'error';
                     resultDiv.textContent = `Error: ${data.error || 'Unknown error occurred'}`;
                 }
             } catch (error) {
                 resultDiv.className = 'error';
-                resultDiv.textContent = 'Error: Failed to process the request';
+                resultDiv.textContent = 'Error: Failed to process the request. Check console for details.';
                 console.error('Error:', error);
             } finally {
                 resultDiv.style.display = 'block';
