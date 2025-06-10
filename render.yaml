@@ -3,13 +3,8 @@ services:
     name: vqa-tool
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0
-      - key: ANTHROPIC_API_KEY
-        fromService:
-          name: anthropic-api-key
-          type: env
-          property: value
+        value: 3.11
     plan: free
