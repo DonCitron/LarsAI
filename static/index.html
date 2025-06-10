@@ -156,8 +156,8 @@
             formData.append('file', selectedFile);
             
             try {
-                // Use Netlify function for deployment
-                const response = await fetch('/.netlify/functions/upload', {
+                // Use Render backend endpoint
+                const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData,
                     headers: {
