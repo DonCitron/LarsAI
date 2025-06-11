@@ -8,6 +8,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from pathlib import Path
+from sap_knowledge_base import search_sap_knowledge, get_sap_context_for_question
 
 # Load environment variables from .env file
 load_dotenv()
@@ -197,11 +198,22 @@ def upload_file():
         search_query = question_data["question"]
         search_results = search_web(search_query)
         
+        # Get SAP knowledge base results
+        sap_context = get_sap_context_for_question(search_query)
+        sap_knowledge_results = sap_context['knowledge']
+        
         # Prepare context for the second API call
         context = "Question: " + question_data["question"] + "\nOptions:\n"
         for i, option in enumerate(question_data["options"], 1):
             context += f"{i}. {option}\n"
-            
+        
+        # Add SAP knowledge base results first (highest priority)
+        if sap_knowledge_results:
+            context += "\nSAP Knowledge Base:\n"
+            for i, result in enumerate(sap_knowledge_results[:2], 1):
+                context += f"{i}. {result['title']}: {result['body']}\n"
+        
+        # Add web search results
         if search_results:
             context += "\nWeb search results:\n"
             for i, result in enumerate(search_results[:3], 1):
@@ -211,56 +223,79 @@ def upload_file():
         answers_required = question_data.get("answers_required", 1)
         
         # Second API call with SAP-enhanced reasoning
-        answer_prompt = f"""Using the question, options, and web search results (if available), 
+        answer_prompt = f"""Using the question, options, SAP Knowledge Base results, and web search results, 
         analyze ALL the given options using structured SAP expertise and reasoning.
         
         IMPORTANT: The question requires selecting {answers_required} correct answer(s).
         
+        PRIORITIZE INFORMATION SOURCES IN THIS ORDER:
+        1. SAP Knowledge Base (official SAP S/4HANA Cloud documentation) - HIGHEST PRIORITY
+        2. Web search results from official SAP sources (help.sap.com, community.sap.com)
+        3. General web search results
+        4. Built-in SAP expertise
+        
         Step-by-step SAP analysis process:
         1. DOMAIN IDENTIFICATION: Identify if this is SAP-related and which SAP domain/module
-        2. SAP CONTEXT ANALYSIS: Consider:
+        2. SAP KNOWLEDGE BASE ANALYSIS: Extract relevant information from the SAP Knowledge Base results
+        3. SAP CONTEXT ANALYSIS: Consider:
+           - SAP S/4HANA Cloud Public Edition specifics
            - SAP module-specific functionality (SD, MM, FI, CO, HR, PP, etc.)
            - SAP technical aspects (ABAP, HANA, Fiori, S/4HANA, etc.)
            - SAP business processes and best practices
-           - SAP certification knowledge and common exam patterns
-        3. OPTION EVALUATION: For each option, analyze:
+           - SAP Activate methodology
+           - SAP Central Business Configuration
+           - SAP Cloud ALM
+           - Release management and upgrades
+        4. OPTION EVALUATION: For each option, analyze:
+           - Alignment with SAP Knowledge Base information
            - Technical accuracy based on SAP functionality
            - Business process alignment with SAP best practices
            - Common SAP terminology and concepts
-           - Typical SAP certification question patterns
+           - SAP S/4HANA Cloud specific features
            - Integration with other SAP modules
-        4. CONFIDENCE CALIBRATION: Base confidence on:
+        5. CONFIDENCE CALIBRATION: Base confidence on:
+           - Match with SAP Knowledge Base (highest weight)
            - Accuracy of SAP technical knowledge
            - Alignment with SAP business processes
            - Quality of web search evidence from SAP sources
            - Consistency with SAP certification standards
         
-        For NON-SAP questions, use general domain expertise as before.
+        For NON-SAP questions, use general domain expertise.
         
         Return a JSON object with this format:
         {{
             "domain": "SAP [Module] or [General Subject]",
-            "sap_module": "SD/MM/FI/CO/HR/PP/Technical/Cloud/etc. or null if not SAP",
+            "sap_module": "SD/MM/FI/CO/HR/PP/Technical/Cloud/S4HANA/etc. or null if not SAP",
             "key_concepts": ["concept1", "concept2"],
             "answers_required": {answers_required},
             "ranked_answers": [
-                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true, "reasoning": "SAP-specific detailed explanation"}},
-                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true, "reasoning": "SAP-specific detailed explanation"}},
-                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false, "reasoning": "SAP-specific detailed explanation"}},
+                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true, "reasoning": "SAP Knowledge Base and detailed explanation"}},
+                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true, "reasoning": "SAP Knowledge Base and detailed explanation"}},
+                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false, "reasoning": "SAP Knowledge Base and detailed explanation"}},
                 ...
             ],
             "overall_confidence": 0.75,
-            "sap_notes": "Additional SAP-specific insights or common pitfalls"
+            "sap_notes": "Additional SAP-specific insights from Knowledge Base or common pitfalls"
         }}
         
         Set "is_recommended": true for the top {answers_required} answers you recommend selecting.
         Include ALL options with detailed SAP-specific reasoning for each.
-        For SAP questions, reference specific transaction codes, tables, or processes when relevant."""
+        For SAP questions, reference specific information from the SAP Knowledge Base, transaction codes, tables, or processes when relevant."""
         
         payload = {
             "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
-            "system": """You are an expert SAP consultant and certified trainer who specializes in analyzing multiple-choice questions across all SAP domains. You have deep knowledge of:
+            "system": """You are an expert SAP consultant and certified trainer who specializes in analyzing multiple-choice questions across all SAP domains. You have access to an official SAP S/4HANA Cloud Public Edition knowledge base with comprehensive documentation. You have deep knowledge of:
+
+SAP S/4HANA CLOUD PUBLIC EDITION:
+- Cloud ERP ready-to-run solution with best practice business processes
+- Two major releases per year (February and August) with automatic updates
+- SAP Activate Methodology: Discover, Prepare, Explore, Realize, Deploy, Run
+- 3-System Landscape: Starter, Development, Test, Production Systems
+- SAP Central Business Configuration for business process activation
+- SAP Cloud ALM for project management and operations
+- Release Assessment and Scope Dependency (RASD) Tool
+- In-app and side-by-side extensibility options
 
 SAP ERP MODULES:
 - SD (Sales & Distribution): Order-to-Cash, Pricing, Shipping, Billing
@@ -278,19 +313,25 @@ SAP TECHNOLOGIES:
 - SAP Fiori/UI5: User Experience, Launchpad, OData Services
 - SAP S/4HANA: Simplification, Universal Journal, Embedded Analytics
 - SAP BW/BI: Data Warehousing, InfoCubes, Queries, Reports
-- SAP PI/PO: Integration, Mapping, Adapters, Monitoring
+- SAP Business Technology Platform (BTP): Integration, Extensions, Development
 
 SAP CLOUD SOLUTIONS:
+- SAP for Me: Digital platform for system management
+- SAP Cloud Identity Services: IAS and IPS for secure access
 - SuccessFactors: Talent Management, Employee Central, Performance
 - Ariba: Procurement, Sourcing, Supplier Management
 - Concur: Travel & Expense Management
-- SAP Cloud Platform: Integration, Development, Analytics
 
 BUSINESS PROCESSES & BEST PRACTICES:
-- Order-to-Cash, Procure-to-Pay, Record-to-Report
+- Finance-led Administrative ERP: Procure-to-Pay, Order-to-Cash, Record-to-Report
+- Service-Centric Industries: Professional Services, Technical Services
+- Product-Centric Industries: Idea-to-Market, Plan-to-Fulfill
 - Master Data Management, Configuration vs Customization
 - Authorization Concepts, Transport Management
-- Integration scenarios, Interface technologies""",
+- Integration scenarios, Interface technologies
+- Fit-to-Standard workshops and User Acceptance Testing
+
+You prioritize information from the SAP Knowledge Base as the most authoritative source for SAP S/4HANA Cloud questions.""",
             "messages": [
                 {
                     "role": "user",
@@ -427,11 +468,22 @@ def process_image(image_path):
         search_query = question_data["question"]
         search_results = search_web(search_query)
         
+        # Get SAP knowledge base results
+        sap_context = get_sap_context_for_question(search_query)
+        sap_knowledge_results = sap_context['knowledge']
+        
         # Prepare context for the second API call
         context = "Question: " + question_data["question"] + "\nOptions:\n"
         for i, option in enumerate(question_data["options"], 1):
             context += f"{i}. {option}\n"
-            
+        
+        # Add SAP knowledge base results first (highest priority)
+        if sap_knowledge_results:
+            context += "\nSAP Knowledge Base:\n"
+            for i, result in enumerate(sap_knowledge_results[:2], 1):
+                context += f"{i}. {result['title']}: {result['body']}\n"
+        
+        # Add web search results
         if search_results:
             context += "\nWeb search results:\n"
             for i, result in enumerate(search_results[:3], 1):
