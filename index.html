@@ -68,6 +68,13 @@
             margin: 8px 0;
             color: #ffffff;
         }
+        .answer-reasoning {
+            margin: 8px 0;
+            font-size: 0.9em;
+            color: #ccc;
+            font-style: italic;
+            line-height: 1.4;
+        }
         .answer-confidence {
             font-size: 0.9em;
             color: #999;
@@ -89,6 +96,20 @@
             color: #ffffff;
             text-align: center;
             margin-bottom: 20px;
+        }
+        .domain-info {
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #007aff;
+        }
+        .overall-confidence {
+            text-align: center;
+            color: #999;
+            margin-bottom: 15px;
+            font-size: 0.9em;
         }
         #spinner { 
             display: none; 
@@ -140,18 +161,41 @@
                 .then(data => {
                     spinner.style.display = 'none';
                     
+                    console.log('Received data:', data); // Debug logging
+                    
+                    // Check for errors first
+                    if (data.error) {
+                        resultDiv.textContent = 'Error: ' + data.error;
+                        return;
+                    }
+                    
                     // Check if we have multiple answers or single answer
-                    if (data.answers && Array.isArray(data.answers)) {
+                    if (data.answers && Array.isArray(data.answers) && data.answers.length > 0) {
                         // Multiple answers format
                         const answersRequired = data.answers_required || 1;
                         let html = `<h3>Select ${answersRequired} Answer${answersRequired > 1 ? 's' : ''}:</h3>`;
+                        
+                        // Show domain and overall confidence if available
+                        if (data.domain) {
+                            html += `<div class="domain-info">Subject: <strong>${data.domain}</strong></div>`;
+                        }
+                        if (data.overall_confidence) {
+                            const overallPercent = Math.round(data.overall_confidence * 100);
+                            html += `<div class="overall-confidence">Overall Confidence: ${overallPercent}%</div>`;
+                        }
                         data.answers.forEach((answer, index) => {
-                            const confidencePercent = Math.round(answer.confidence * 100);
+                            const answerText = answer.text || answer || 'No answer text';
+                            const confidence = answer.confidence || 0;
+                            const confidencePercent = Math.round(confidence * 100);
                             const isRecommended = answer.is_recommended || (index < answersRequired);
+                            const rank = answer.rank || index + 1;
+                            
+                            const reasoning = answer.reasoning || 'No reasoning provided';
                             html += `
                                 <div class="answer-item ${isRecommended ? 'recommended' : ''}">
-                                    <div class="answer-rank">Rank ${answer.rank || index + 1}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
-                                    <div class="answer-text">${answer.text}</div>
+                                    <div class="answer-rank">Rank ${rank}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
+                                    <div class="answer-text">${answerText}</div>
+                                    <div class="answer-reasoning">${reasoning}</div>
                                     <div class="answer-confidence">Confidence: ${confidencePercent}%</div>
                                     <div class="confidence-bar">
                                         <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
@@ -164,7 +208,8 @@
                         // Fallback to single answer format
                         resultDiv.textContent = data.answer;
                     } else {
-                        resultDiv.textContent = 'Error: ' + (data.error || 'Unknown error');
+                        console.error('Unexpected data format:', data);
+                        resultDiv.textContent = 'Error: Unexpected response format. Check console for details.';
                     }
                 })
                 .catch(error => {

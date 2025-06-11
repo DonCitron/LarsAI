@@ -13,11 +13,63 @@ from pathlib import Path
 load_dotenv()
 
 def search_web(query, max_results=3):
-    """Search the web for information related to the query."""
+    """Enhanced web search with better query generation and result filtering."""
     try:
+        # Extract key terms and concepts for better search
+        search_queries = []
+        
+        # Primary query
+        search_queries.append(query)
+        
+        # Add domain-specific terms if detected
+        if any(term in query.lower() for term in ['calculate', 'equation', 'formula']):
+            search_queries.append(f"{query} math formula solution")
+        elif any(term in query.lower() for term in ['history', 'war', 'century', 'year']):
+            search_queries.append(f"{query} historical facts")
+        elif any(term in query.lower() for term in ['biology', 'cell', 'organism', 'DNA']):
+            search_queries.append(f"{query} biology science")
+        elif any(term in query.lower() for term in ['chemistry', 'element', 'reaction', 'molecule']):
+            search_queries.append(f"{query} chemistry science")
+        elif any(term in query.lower() for term in ['physics', 'force', 'energy', 'mass']):
+            search_queries.append(f"{query} physics science")
+        
+        all_results = []
+        
         with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
-            return results
+            for search_query in search_queries[:2]:  # Limit to 2 queries to avoid rate limiting
+                try:
+                    results = list(ddgs.text(search_query, max_results=max_results))
+                    # Filter and score results
+                    filtered_results = []
+                    for result in results:
+                        # Skip low-quality sources
+                        if any(domain in result.get('href', '').lower() for domain in ['yahoo.com', 'answers.com']):
+                            continue
+                        # Prefer educational and authoritative sources
+                        if any(domain in result.get('href', '').lower() for domain in ['.edu', 'wikipedia', 'britannica', 'khan']):
+                            result['authority_score'] = 1.0
+                        else:
+                            result['authority_score'] = 0.5
+                        filtered_results.append(result)
+                    
+                    all_results.extend(filtered_results)
+                except Exception as inner_e:
+                    print(f"Error in individual search query '{search_query}': {inner_e}")
+                    continue
+        
+        # Remove duplicates and sort by authority
+        seen_urls = set()
+        unique_results = []
+        for result in all_results:
+            url = result.get('href', '')
+            if url not in seen_urls:
+                seen_urls.add(url)
+                unique_results.append(result)
+        
+        # Sort by authority score and return top results
+        unique_results.sort(key=lambda x: x.get('authority_score', 0), reverse=True)
+        return unique_results[:max_results]
+        
     except Exception as e:
         print(f"Error during web search: {e}")
         return []
@@ -59,25 +111,38 @@ def upload_file():
             "anthropic-beta": "messages-2023-12-15"
         }
 
-        # Extract text from the image
-        initial_prompt = """Analyze the image and extract the following information:
-        1. The question being asked
-        2. All multiple-choice options (A, B, C, etc.)
-        3. How many answers should be selected (look for phrases like "Select 2 answers", "Choose 3 options", "Kreuzen Sie 2 Antworten an", etc.)
+        # Extract text from the image with enhanced OCR
+        initial_prompt = """Carefully analyze the image and extract the following information with high precision:
+        
+        IMPORTANT: Pay close attention to text clarity, formatting, and context.
+        
+        Extract:
+        1. The complete question text (including any sub-questions or context)
+        2. ALL multiple-choice options with their labels (A, B, C, D, etc.)
+        3. Number of required answers (look for phrases like "Select 2 answers", "Choose 3 options", "Kreuzen Sie 2 Antworten an", "Mark all that apply", etc.)
+        4. Any additional context or instructions
+        
+        Text preprocessing guidelines:
+        - Clean up OCR artifacts and formatting issues
+        - Preserve mathematical symbols, equations, and special characters
+        - Maintain proper spacing and punctuation
+        - Handle multiple languages appropriately
         
         Return the information in this JSON format:
         {
-            "question": "the question text",
-            "options": ["option A", "option B", "option C"],
-            "answers_required": 2
+            "question": "the complete question text",
+            "options": ["option A text", "option B text", "option C text"],
+            "answers_required": 1,
+            "additional_context": "any extra instructions or context",
+            "language": "detected language (en, de, etc.)"
         }
         
         If the number of required answers is not specified, set answers_required to 1."""
         
         # First API call to extract question and options
         initial_payload = {
-            "model": "claude-3-opus-20240229",
-            "max_tokens": 1000,
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 1500,
             "system": "You are a helpful assistant that extracts questions and options from images.",
             "messages": [
                 {
@@ -144,11 +209,11 @@ def upload_file():
         
         Set "is_recommended": true for the top {answers_required} answers you recommend selecting.
         Include ALL options in your response, even those with low confidence.
-        Base your confidence on the evidence from web search results and your knowledge."""
+        Base confidence on evidence quality and domain expertise."""
         
         payload = {
-            "model": "claude-3-opus-20240229",
-            "max_tokens": 500,
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 1000,
             "system": "You are a helpful assistant that analyzes multiple-choice questions and provides confidence scores for all options.",
             "messages": [
                 {
@@ -173,20 +238,48 @@ def upload_file():
         
         # Extract and parse the ranked answers
         response_text = response.json()["content"][0]["text"].strip()
+        
+        # Debug logging
+        print(f"Raw API response: {response_text}")
+        
         try:
+            # Try to extract JSON from the response if it's wrapped in markdown
+            if "```json" in response_text:
+                start = response_text.find("```json") + 7
+                end = response_text.find("```", start)
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+            elif "```" in response_text:
+                start = response_text.find("```") + 3
+                end = response_text.find("```", start)
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+            
             result = json.loads(response_text)
+            print(f"Parsed JSON result: {result}")
+            
             # Ensure backward compatibility
             if "ranked_answers" in result:
                 return jsonify({
                     "answers": result["ranked_answers"],
                     "answers_required": result.get("answers_required", 1)
                 })
+            elif "answers" in result and isinstance(result["answers"], list):
+                return jsonify({
+                    "answers": result["answers"],
+                    "answers_required": result.get("answers_required", 1)
+                })
             else:
-                # Handle old format
-                return jsonify({"answers": result})
-        except json.JSONDecodeError:
+                # Handle old format or single answer
+                return jsonify({"answers": [{"text": response_text, "confidence": 1.0, "rank": 1, "is_recommended": True}]})
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+            print(f"Failed to parse: {response_text}")
             # Fallback to single answer format if parsing fails
-            return jsonify({"answer": response_text})
+            return jsonify({
+                "answers": [{"text": response_text, "confidence": 1.0, "rank": 1, "is_recommended": True}],
+                "answers_required": 1
+            })
         
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"API request failed: {str(e)}"}), 500
@@ -225,7 +318,7 @@ def process_image(image_path):
         }"""
         
         initial_payload = {
-            "model": "claude-3-opus-20240229",
+            "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
             "system": "You are a helpful assistant that extracts questions and options from images.",
             "messages": [
@@ -293,7 +386,7 @@ def process_image(image_path):
         Base your confidence on the evidence from web search results and your knowledge."""
         
         payload = {
-            "model": "claude-3-opus-20240229",
+            "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 500,
             "system": "You are a helpful assistant that analyzes multiple-choice questions and provides confidence scores for all options.",
             "messages": [
@@ -315,12 +408,51 @@ def process_image(image_path):
         
         # Extract and parse the ranked answers
         response_text = response.json()["content"][0]["text"].strip()
+        
+        # Debug logging
+        print(f"Raw API response: {response_text}", file=sys.stderr)
+        
         try:
-            answers = json.loads(response_text)
-            return {"answers": answers}
-        except json.JSONDecodeError:
+            # Try to extract JSON from the response if it's wrapped in markdown
+            if "```json" in response_text:
+                start = response_text.find("```json") + 7
+                end = response_text.find("```", start)
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+            elif "```" in response_text:
+                start = response_text.find("```") + 3
+                end = response_text.find("```", start)
+                if end != -1:
+                    response_text = response_text[start:end].strip()
+            
+            result = json.loads(response_text)
+            print(f"Parsed JSON result: {result}", file=sys.stderr)
+            
+            # Ensure consistent format
+            if "ranked_answers" in result:
+                return {
+                    "answers": result["ranked_answers"],
+                    "answers_required": result.get("answers_required", 1)
+                }
+            elif "answers" in result and isinstance(result["answers"], list):
+                return {
+                    "answers": result["answers"],
+                    "answers_required": result.get("answers_required", 1)
+                }
+            else:
+                # Handle old format or single answer
+                return {
+                    "answers": [{"text": response_text, "confidence": 1.0, "rank": 1, "is_recommended": True}],
+                    "answers_required": 1
+                }
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}", file=sys.stderr)
+            print(f"Failed to parse: {response_text}", file=sys.stderr)
             # Fallback to single answer format if parsing fails
-            return {"answer": response_text}
+            return {
+                "answers": [{"text": response_text, "confidence": 1.0, "rank": 1, "is_recommended": True}],
+                "answers_required": 1
+            }
         
     except Exception as e:
         return {"error": str(e)}

@@ -205,18 +205,31 @@
                 if (response.ok) {
                     resultDiv.className = 'success';
                     
+                    console.log('Received data:', data); // Debug logging
+                    
+                    // Check for errors first
+                    if (data.error) {
+                        resultDiv.className = 'error';
+                        resultDiv.textContent = 'Error: ' + data.error;
+                        return;
+                    }
+                    
                     // Check if we have multiple answers or single answer
-                    if (data.answers && Array.isArray(data.answers)) {
+                    if (data.answers && Array.isArray(data.answers) && data.answers.length > 0) {
                         // Multiple answers format
                         const answersRequired = data.answers_required || 1;
                         let html = `<h3>Select ${answersRequired} Answer${answersRequired > 1 ? 's' : ''}:</h3>`;
                         data.answers.forEach((answer, index) => {
-                            const confidencePercent = Math.round(answer.confidence * 100);
+                            const answerText = answer.text || answer || 'No answer text';
+                            const confidence = answer.confidence || 0;
+                            const confidencePercent = Math.round(confidence * 100);
                             const isRecommended = answer.is_recommended || (index < answersRequired);
+                            const rank = answer.rank || index + 1;
+                            
                             html += `
                                 <div class="answer-item ${isRecommended ? 'recommended' : ''}">
-                                    <div class="answer-rank">Rank ${answer.rank || index + 1}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
-                                    <div class="answer-text">${answer.text}</div>
+                                    <div class="answer-rank">Rank ${rank}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
+                                    <div class="answer-text">${answerText}</div>
                                     <div class="answer-confidence">Confidence: ${confidencePercent}%</div>
                                     <div class="confidence-bar">
                                         <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
@@ -225,9 +238,13 @@
                             `;
                         });
                         resultDiv.innerHTML = html;
-                    } else {
+                    } else if (data.answer) {
                         // Fallback to single answer format
-                        resultDiv.textContent = `Answer: ${data.answer || data}`;
+                        resultDiv.textContent = `Answer: ${data.answer}`;
+                    } else {
+                        console.error('Unexpected data format:', data);
+                        resultDiv.className = 'error';
+                        resultDiv.textContent = 'Error: Unexpected response format. Check console for details.';
                     }
                 } else {
                     resultDiv.className = 'error';
