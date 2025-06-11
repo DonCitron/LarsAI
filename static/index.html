@@ -51,6 +51,41 @@
             border: 1px solid #ebccd1;
             color: #a94442;
         }
+        .answer-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #ccc;
+        }
+        .answer-item.recommended {
+            background-color: #e8f5e9;
+            border-left-color: #4CAF50;
+        }
+        .answer-rank {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .answer-text {
+            margin: 5px 0;
+        }
+        .answer-confidence {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .confidence-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+        .confidence-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -169,7 +204,31 @@
                 
                 if (response.ok) {
                     resultDiv.className = 'success';
-                    resultDiv.textContent = `Answer: ${data.answer || data}`;
+                    
+                    // Check if we have multiple answers or single answer
+                    if (data.answers && Array.isArray(data.answers)) {
+                        // Multiple answers format
+                        const answersRequired = data.answers_required || 1;
+                        let html = `<h3>Select ${answersRequired} Answer${answersRequired > 1 ? 's' : ''}:</h3>`;
+                        data.answers.forEach((answer, index) => {
+                            const confidencePercent = Math.round(answer.confidence * 100);
+                            const isRecommended = answer.is_recommended || (index < answersRequired);
+                            html += `
+                                <div class="answer-item ${isRecommended ? 'recommended' : ''}">
+                                    <div class="answer-rank">Rank ${answer.rank || index + 1}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
+                                    <div class="answer-text">${answer.text}</div>
+                                    <div class="answer-confidence">Confidence: ${confidencePercent}%</div>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        resultDiv.innerHTML = html;
+                    } else {
+                        // Fallback to single answer format
+                        resultDiv.textContent = `Answer: ${data.answer || data}`;
+                    }
                 } else {
                     resultDiv.className = 'error';
                     resultDiv.textContent = `Error: ${data.error || 'Unknown error occurred'}`;

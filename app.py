@@ -63,12 +63,16 @@ def upload_file():
         initial_prompt = """Analyze the image and extract the following information:
         1. The question being asked
         2. All multiple-choice options (A, B, C, etc.)
+        3. How many answers should be selected (look for phrases like "Select 2 answers", "Choose 3 options", "Kreuzen Sie 2 Antworten an", etc.)
         
         Return the information in this JSON format:
         {
             "question": "the question text",
-            "options": ["option A", "option B", "option C"]
-        }"""
+            "options": ["option A", "option B", "option C"],
+            "answers_required": 2
+        }
+        
+        If the number of required answers is not specified, set answers_required to 1."""
         
         # First API call to extract question and options
         initial_payload = {
@@ -118,15 +122,34 @@ def upload_file():
             for i, result in enumerate(search_results[:3], 1):
                 context += f"{i}. {result['title']}: {result['body']}\n"
         
-        # Second API call to determine the answer with web context
-        answer_prompt = """Using the question, options, and web search results (if available), 
-        determine the most likely correct answer. Return ONLY the text of the correct answer option, 
-        without any explanations or introductory sentences. If you're not sure, make your best guess."""
+        # Prepare answer prompt with number of required answers
+        answers_required = question_data.get("answers_required", 1)
+        
+        # Second API call to determine possible answers with confidence scores
+        answer_prompt = f"""Using the question, options, and web search results (if available), 
+        analyze ALL the given options and rank them by likelihood of being correct.
+        
+        IMPORTANT: The question requires selecting {answers_required} correct answer(s).
+        
+        Return a JSON object with this format:
+        {{
+            "answers_required": {answers_required},
+            "ranked_answers": [
+                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true}},
+                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true}},
+                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false}},
+                ...
+            ]
+        }}
+        
+        Set "is_recommended": true for the top {answers_required} answers you recommend selecting.
+        Include ALL options in your response, even those with low confidence.
+        Base your confidence on the evidence from web search results and your knowledge."""
         
         payload = {
             "model": "claude-3-opus-20240229",
-            "max_tokens": 100,
-            "system": "You are a helpful assistant that answers multiple-choice questions based on the given context.",
+            "max_tokens": 500,
+            "system": "You are a helpful assistant that analyzes multiple-choice questions and provides confidence scores for all options.",
             "messages": [
                 {
                     "role": "user",
@@ -140,7 +163,7 @@ def upload_file():
             ]
         }
         
-        # Make the second API call to get the answer
+        # Make the second API call to get the ranked answers
         response = requests.post(
             "https://api.anthropic.com/v1/messages",
             headers=headers,
@@ -148,9 +171,22 @@ def upload_file():
         )
         response.raise_for_status()
         
-        # Extract and return the answer
-        answer = response.json()["content"][0]["text"].strip()
-        return jsonify({"answer": answer})
+        # Extract and parse the ranked answers
+        response_text = response.json()["content"][0]["text"].strip()
+        try:
+            result = json.loads(response_text)
+            # Ensure backward compatibility
+            if "ranked_answers" in result:
+                return jsonify({
+                    "answers": result["ranked_answers"],
+                    "answers_required": result.get("answers_required", 1)
+                })
+            else:
+                # Handle old format
+                return jsonify({"answers": result})
+        except json.JSONDecodeError:
+            # Fallback to single answer format if parsing fails
+            return jsonify({"answer": response_text})
         
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"API request failed: {str(e)}"}), 500
@@ -232,15 +268,34 @@ def process_image(image_path):
             for i, result in enumerate(search_results[:3], 1):
                 context += f"{i}. {result['title']}: {result['body']}\n"
         
-        # Second API call to determine the answer with web context
-        answer_prompt = """Using the question, options, and web search results (if available), 
-        determine the most likely correct answer. Return ONLY the text of the correct answer option, 
-        without any explanations or introductory sentences. If you're not sure, make your best guess."""
+        # Prepare answer prompt with number of required answers
+        answers_required = question_data.get("answers_required", 1)
+        
+        # Second API call to determine possible answers with confidence scores
+        answer_prompt = f"""Using the question, options, and web search results (if available), 
+        analyze ALL the given options and rank them by likelihood of being correct.
+        
+        IMPORTANT: The question requires selecting {answers_required} correct answer(s).
+        
+        Return a JSON object with this format:
+        {{
+            "answers_required": {answers_required},
+            "ranked_answers": [
+                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true}},
+                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true}},
+                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false}},
+                ...
+            ]
+        }}
+        
+        Set "is_recommended": true for the top {answers_required} answers you recommend selecting.
+        Include ALL options in your response, even those with low confidence.
+        Base your confidence on the evidence from web search results and your knowledge."""
         
         payload = {
             "model": "claude-3-opus-20240229",
-            "max_tokens": 100,
-            "system": "You are a helpful assistant that answers multiple-choice questions based on the given context.",
+            "max_tokens": 500,
+            "system": "You are a helpful assistant that analyzes multiple-choice questions and provides confidence scores for all options.",
             "messages": [
                 {
                     "role": "user",
@@ -258,8 +313,14 @@ def process_image(image_path):
         )
         response.raise_for_status()
         
-        answer = response.json()["content"][0]["text"].strip()
-        return {"answer": answer}
+        # Extract and parse the ranked answers
+        response_text = response.json()["content"][0]["text"].strip()
+        try:
+            answers = json.loads(response_text)
+            return {"answers": answers}
+        except json.JSONDecodeError:
+            # Fallback to single answer format if parsing fails
+            return {"answer": response_text}
         
     except Exception as e:
         return {"error": str(e)}
