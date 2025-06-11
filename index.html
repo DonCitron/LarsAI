@@ -111,6 +111,25 @@
             margin-bottom: 15px;
             font-size: 0.9em;
         }
+        .sap-module-info {
+            background-color: #2a4a2a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #4CAF50;
+            border-left: 4px solid #4CAF50;
+        }
+        .sap-notes {
+            background-color: #2a2a3a;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            color: #FFA726;
+            font-size: 0.9em;
+            border-left: 4px solid #FFA726;
+            line-height: 1.4;
+        }
         #spinner { 
             display: none; 
             margin: 20px auto; 
@@ -175,13 +194,19 @@
                         const answersRequired = data.answers_required || 1;
                         let html = `<h3>Select ${answersRequired} Answer${answersRequired > 1 ? 's' : ''}:</h3>`;
                         
-                        // Show domain and overall confidence if available
+                        // Show domain and SAP-specific information if available
                         if (data.domain) {
                             html += `<div class="domain-info">Subject: <strong>${data.domain}</strong></div>`;
+                        }
+                        if (data.sap_module) {
+                            html += `<div class="sap-module-info">SAP Module: <strong>${data.sap_module}</strong></div>`;
                         }
                         if (data.overall_confidence) {
                             const overallPercent = Math.round(data.overall_confidence * 100);
                             html += `<div class="overall-confidence">Overall Confidence: ${overallPercent}%</div>`;
+                        }
+                        if (data.sap_notes) {
+                            html += `<div class="sap-notes"><strong>SAP Notes:</strong> ${data.sap_notes}</div>`;
                         }
                         data.answers.forEach((answer, index) => {
                             const answerText = answer.text || answer || 'No answer text';

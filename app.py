@@ -22,7 +22,23 @@ def search_web(query, max_results=3):
         search_queries.append(query)
         
         # Add domain-specific terms if detected
-        if any(term in query.lower() for term in ['calculate', 'equation', 'formula']):
+        if any(term in query.lower() for term in ['sap', 'erp', 'abap', 'fiori', 'hana', 's/4hana', 'ariba', 'successfactors', 'concur']):
+            # SAP-specific search queries
+            search_queries.append(f"{query} SAP help documentation")
+            search_queries.append(f"{query} SAP community wiki")
+            if any(module in query.lower() for module in ['sd', 'sales', 'distribution']):
+                search_queries.append(f"{query} SAP SD sales distribution")
+            elif any(module in query.lower() for module in ['mm', 'materials', 'procurement']):
+                search_queries.append(f"{query} SAP MM materials management")
+            elif any(module in query.lower() for module in ['fi', 'finance', 'accounting']):
+                search_queries.append(f"{query} SAP FI financial accounting")
+            elif any(module in query.lower() for module in ['co', 'controlling']):
+                search_queries.append(f"{query} SAP CO controlling")
+            elif any(module in query.lower() for module in ['hr', 'human', 'payroll']):
+                search_queries.append(f"{query} SAP HR human resources")
+            elif any(module in query.lower() for module in ['pp', 'production', 'planning']):
+                search_queries.append(f"{query} SAP PP production planning")
+        elif any(term in query.lower() for term in ['calculate', 'equation', 'formula']):
             search_queries.append(f"{query} math formula solution")
         elif any(term in query.lower() for term in ['history', 'war', 'century', 'year']):
             search_queries.append(f"{query} historical facts")
@@ -46,8 +62,12 @@ def search_web(query, max_results=3):
                         if any(domain in result.get('href', '').lower() for domain in ['yahoo.com', 'answers.com']):
                             continue
                         # Prefer educational and authoritative sources
-                        if any(domain in result.get('href', '').lower() for domain in ['.edu', 'wikipedia', 'britannica', 'khan']):
-                            result['authority_score'] = 1.0
+                        if any(domain in result.get('href', '').lower() for domain in ['sap.com', 'help.sap.com', 'community.sap.com', 'blogs.sap.com', 'sapinsider.org']):
+                            result['authority_score'] = 1.0  # SAP official sources
+                        elif any(domain in result.get('href', '').lower() for domain in ['.edu', 'wikipedia', 'britannica', 'khan']):
+                            result['authority_score'] = 0.9  # Educational sources
+                        elif any(domain in result.get('href', '').lower() for domain in ['sapcenter.com', 'sapgenie.com', 'guru99.com']):
+                            result['authority_score'] = 0.8  # SAP training sources
                         else:
                             result['authority_score'] = 0.5
                         filtered_results.append(result)
@@ -190,31 +210,87 @@ def upload_file():
         # Prepare answer prompt with number of required answers
         answers_required = question_data.get("answers_required", 1)
         
-        # Second API call to determine possible answers with confidence scores
+        # Second API call with SAP-enhanced reasoning
         answer_prompt = f"""Using the question, options, and web search results (if available), 
-        analyze ALL the given options and rank them by likelihood of being correct.
+        analyze ALL the given options using structured SAP expertise and reasoning.
         
         IMPORTANT: The question requires selecting {answers_required} correct answer(s).
         
+        Step-by-step SAP analysis process:
+        1. DOMAIN IDENTIFICATION: Identify if this is SAP-related and which SAP domain/module
+        2. SAP CONTEXT ANALYSIS: Consider:
+           - SAP module-specific functionality (SD, MM, FI, CO, HR, PP, etc.)
+           - SAP technical aspects (ABAP, HANA, Fiori, S/4HANA, etc.)
+           - SAP business processes and best practices
+           - SAP certification knowledge and common exam patterns
+        3. OPTION EVALUATION: For each option, analyze:
+           - Technical accuracy based on SAP functionality
+           - Business process alignment with SAP best practices
+           - Common SAP terminology and concepts
+           - Typical SAP certification question patterns
+           - Integration with other SAP modules
+        4. CONFIDENCE CALIBRATION: Base confidence on:
+           - Accuracy of SAP technical knowledge
+           - Alignment with SAP business processes
+           - Quality of web search evidence from SAP sources
+           - Consistency with SAP certification standards
+        
+        For NON-SAP questions, use general domain expertise as before.
+        
         Return a JSON object with this format:
         {{
+            "domain": "SAP [Module] or [General Subject]",
+            "sap_module": "SD/MM/FI/CO/HR/PP/Technical/Cloud/etc. or null if not SAP",
+            "key_concepts": ["concept1", "concept2"],
             "answers_required": {answers_required},
             "ranked_answers": [
-                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true}},
-                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true}},
-                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false}},
+                {{"text": "option text", "confidence": 0.85, "rank": 1, "is_recommended": true, "reasoning": "SAP-specific detailed explanation"}},
+                {{"text": "option text", "confidence": 0.60, "rank": 2, "is_recommended": true, "reasoning": "SAP-specific detailed explanation"}},
+                {{"text": "option text", "confidence": 0.30, "rank": 3, "is_recommended": false, "reasoning": "SAP-specific detailed explanation"}},
                 ...
-            ]
+            ],
+            "overall_confidence": 0.75,
+            "sap_notes": "Additional SAP-specific insights or common pitfalls"
         }}
         
         Set "is_recommended": true for the top {answers_required} answers you recommend selecting.
-        Include ALL options in your response, even those with low confidence.
-        Base confidence on evidence quality and domain expertise."""
+        Include ALL options with detailed SAP-specific reasoning for each.
+        For SAP questions, reference specific transaction codes, tables, or processes when relevant."""
         
         payload = {
             "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
-            "system": "You are a helpful assistant that analyzes multiple-choice questions and provides confidence scores for all options.",
+            "system": """You are an expert SAP consultant and certified trainer who specializes in analyzing multiple-choice questions across all SAP domains. You have deep knowledge of:
+
+SAP ERP MODULES:
+- SD (Sales & Distribution): Order-to-Cash, Pricing, Shipping, Billing
+- MM (Materials Management): Procurement-to-Pay, Inventory, Vendor Management  
+- FI (Financial Accounting): General Ledger, Accounts Payable/Receivable, Asset Accounting
+- CO (Controlling): Cost Centers, Profit Centers, Internal Orders, Profitability Analysis
+- HR/HCM (Human Capital Management): Personnel, Payroll, Time Management, Organizational Management
+- PP (Production Planning): MRP, Capacity Planning, Shop Floor Control
+- QM (Quality Management): Quality Planning, Inspection, Certificates
+- PM (Plant Maintenance): Preventive/Corrective Maintenance, Work Orders
+
+SAP TECHNOLOGIES:
+- ABAP Programming, Workbench, Data Dictionary, SmartForms, Adobe Forms
+- SAP HANA: In-Memory Computing, Modeling, SQL Script
+- SAP Fiori/UI5: User Experience, Launchpad, OData Services
+- SAP S/4HANA: Simplification, Universal Journal, Embedded Analytics
+- SAP BW/BI: Data Warehousing, InfoCubes, Queries, Reports
+- SAP PI/PO: Integration, Mapping, Adapters, Monitoring
+
+SAP CLOUD SOLUTIONS:
+- SuccessFactors: Talent Management, Employee Central, Performance
+- Ariba: Procurement, Sourcing, Supplier Management
+- Concur: Travel & Expense Management
+- SAP Cloud Platform: Integration, Development, Analytics
+
+BUSINESS PROCESSES & BEST PRACTICES:
+- Order-to-Cash, Procure-to-Pay, Record-to-Report
+- Master Data Management, Configuration vs Customization
+- Authorization Concepts, Transport Management
+- Integration scenarios, Interface technologies""",
             "messages": [
                 {
                     "role": "user",

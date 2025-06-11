@@ -69,6 +69,12 @@
         .answer-text {
             margin: 5px 0;
         }
+        .answer-reasoning {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #888;
+            line-height: 1.4;
+        }
         .answer-confidence {
             font-size: 0.9em;
             color: #666;
@@ -85,6 +91,40 @@
             background-color: #4CAF50;
             border-radius: 5px;
             transition: width 0.3s ease;
+        }
+        .domain-info {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+        .overall-confidence {
+            text-align: center;
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+        }
+        .sap-module-info {
+            background-color: #e8f5e9;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #2e7d32;
+            border-left: 4px solid #4CAF50;
+        }
+        .sap-notes {
+            background-color: #fff3e0;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            color: #ef6c00;
+            font-size: 0.9em;
+            border-left: 4px solid #ff9800;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -219,17 +259,34 @@
                         // Multiple answers format
                         const answersRequired = data.answers_required || 1;
                         let html = `<h3>Select ${answersRequired} Answer${answersRequired > 1 ? 's' : ''}:</h3>`;
+                        
+                        // Show domain and SAP-specific information if available
+                        if (data.domain) {
+                            html += `<div class="domain-info">Subject: <strong>${data.domain}</strong></div>`;
+                        }
+                        if (data.sap_module) {
+                            html += `<div class="sap-module-info">SAP Module: <strong>${data.sap_module}</strong></div>`;
+                        }
+                        if (data.overall_confidence) {
+                            const overallPercent = Math.round(data.overall_confidence * 100);
+                            html += `<div class="overall-confidence">Overall Confidence: ${overallPercent}%</div>`;
+                        }
+                        if (data.sap_notes) {
+                            html += `<div class="sap-notes"><strong>SAP Notes:</strong> ${data.sap_notes}</div>`;
+                        }
                         data.answers.forEach((answer, index) => {
                             const answerText = answer.text || answer || 'No answer text';
                             const confidence = answer.confidence || 0;
                             const confidencePercent = Math.round(confidence * 100);
                             const isRecommended = answer.is_recommended || (index < answersRequired);
                             const rank = answer.rank || index + 1;
+                            const reasoning = answer.reasoning || 'No reasoning provided';
                             
                             html += `
                                 <div class="answer-item ${isRecommended ? 'recommended' : ''}">
                                     <div class="answer-rank">Rank ${rank}${isRecommended ? ' ✓ RECOMMENDED' : ''}</div>
                                     <div class="answer-text">${answerText}</div>
+                                    <div class="answer-reasoning"><em>${reasoning}</em></div>
                                     <div class="answer-confidence">Confidence: ${confidencePercent}%</div>
                                     <div class="confidence-bar">
                                         <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
